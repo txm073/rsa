@@ -1,0 +1,16 @@
+p and q are two random prime numbers (the larger the numbers the more secure)
+p = 89
+q = 67
+
+n = 89 * 67
+m = 88 * 66
+m = number of coprimes of n
+
+d is a manually generated number
+d < m and also a coprime of m
+e is a number where (e * d) % m = 1
+
+x is a random negative integer
+(d * e) + (x * m) = 1
+e and x are unknown values, this equation is to find e
+
