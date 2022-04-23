@@ -3,6 +3,7 @@ import math
 import string
 import numpy as np
 import pickle
+import os, sys
 
 
 class RSA:
@@ -56,48 +57,23 @@ class RSA:
                 primes_found.append(num)
         return primes_found
 
-    def powmod(self, n, e, mod):
-        original = n
-        n = 1
-        for i in range(e):
-            n = (n * original) % mod
-        return n
-
-    def get_coefficients(self, p, q):
-        n = p * q
-        t = (p - 1) * (q - 1)
-        e = self.get_coprimes(t, max=10)[1]
-        d = 1
-        while True:
-            if (d * e % t) == 1:
-                return d, e
-            d += 1
-
-    def create_charmaps(self, coprimes):
-        coprimes = coprimes[1:-1]
-        int2char = {coprimes[i]: c for i, c in enumerate(self.chars)}
-        char2int = {c: coprimes[i] for i, c in enumerate(self.chars)}
-        return int2char, char2int
-
-    def save_all(self, public_key, private_key, int2char, char2int, filename="rsa.pkl"):
+    def save(self, public_key, private_key, filename="rsa.pkl"):
         with open(filename, "wb") as f:
-            pickle.dump([public_key, private_key, int2char, char2int], f)
+            pickle.dump((public_key, private_key), f)
 
     def load(self, filename="rsa.pkl"):
         with open(filename, "rb") as f:
-            public_key, private_key, int2char, char2int = pickle.load(f)
+            public_key, private_key = pickle.load(f)
         self.public_key, self.private_key = public_key, private_key
-        self.int2char, self.char2int = int2char, char2int
 
     def encode(self, msg):
-        return ":".join([str(self.powmod(self.char2int[char], self.public_key[1], self.public_key[0])) for char in msg])[:-1]
+        return ":".join([str(pow(ord(char), self.public_key[1], self.public_key[0])) for char in msg + " "])[:-1]
 
     def decode(self, msg):
-        return "".join([self.int2char[self.powmod(int(n), self.private_key, self.public_key[0])] for n in msg.split(":")])
+        return "".join([chr(pow(int(n), self.private_key, self.public_key[0])) for n in msg.split(":")[:-1]])
 
     def create_keys(self, lower, upper, save_new=True, verbose=False):
         p, q = self.get_large_primes(lower, upper)
-        assert (p - 1) * (q - 1) > len(self.chars), "Not enough coprimes to map to characters, please pick larger prime numbers"
         if verbose:
             print(f"[RSA]: Found prime numbers: p = {p}, q = {q}")
         n = p * q
@@ -106,22 +82,48 @@ class RSA:
         d, e = self.get_coefficients(p, q)
         if verbose:
             print(f"[RSA]: Found coefficients: d = {d}, e = {e}")
-        coprimes = self.get_coprimes(n, max=len(self.chars) + 1)
-        if verbose:
-            print("[RSA]: Creating character maps with coprimes of n")
-        charmaps = self.create_charmaps(coprimes)
         if save_new:
-            self.save_all([n, e], d, *charmaps)
+            self.save((n, e), d)
             if verbose:
                 print("[RSA]: Saved details to disk")
-        return {"public_key": [n, e], "private_key": d, "int2char": charmaps[0], "char2int": charmaps[1]}
+        return (n, e), d
 
+    def modinv(self, a, m):
+        s, old_s = 0, 1
+        t, old_t = 1, 0
+        r, old_r = m, a
+        while r != 0:
+            quotient = old_r // r
+            old_r, r = r, old_r - quotient * r
+            old_s, s = s, old_s - quotient * s
+            old_t, t = t, old_t - quotient * t
+        gcd, x, y = old_r, old_s, old_t
+        return x % m
+
+    def get_coefficients(self, p, q):
+        mod = (p - 1) * (q - 1)
+        e = self.get_coprimes(mod, max=1000)[random.randint(1, 999)]
+        d = self.modinv(e, mod)
+        return d, e
+
+
+def main():
+    rsa = RSA()
+    if not os.path.exists("rsa.pkl"):
+        rsa.create_keys(1e+12, 1e+15, save_new=True, verbose=True)
+    rsa.load("rsa.pkl")
+
+    data = "Hello World!"
+    print("Original data:", end=" ")
+    print(data)
+    input("Press enter to encrypt...")
+    enc = rsa.encode(data)
+    print("Encrypted data:", end=" ")
+    print(enc)
+    input("Press enter to decrypt...")
+    print("Decrypted data:", end=" ")
+    print(rsa.decode(enc))
 
 if __name__ == "__main__":
-    rsa = RSA()
-    rsa.create_keys(100, 1000, verbose=True)
-    rsa.load("rsa.pkl")
-    msg = rsa.encode("Hello World!")
-    print(msg)
-    print()
-   
+    main()
+
